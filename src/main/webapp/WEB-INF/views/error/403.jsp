@@ -1,0 +1,3 @@
+<%@ page contentType="text/html;charset=UTF-8" %>
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>403 | VerityFlow</title><link rel="stylesheet" href="<%= request.getContextPath() %>/assets/css/style.css"></head><body><main class="content" style="padding:64px"><section class="panel"><span class="eyebrow">ERROR 403</span><h1>Access denied</h1><p class="muted">You do not have permission to access this resource.</p><a class="btn btn-primary" href="<%= request.getContextPath() %>/">Return home</a></section></main><script src="<%= request.getContextPath() %>/assets/js/main.js"></script></body></html>

@@ -1,0 +1,3 @@
+<%@ page contentType="text/html;charset=UTF-8" %>
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>500 | VerityFlow</title><link rel="stylesheet" href="<%= request.getContextPath() %>/assets/css/style.css"></head><body><main class="content" style="padding:64px"><section class="panel"><span class="eyebrow">ERROR 500</span><h1>Something went wrong</h1><p class="muted">The server could not complete the request.</p><a class="btn btn-primary" href="<%= request.getContextPath() %>/">Return home</a></section></main><script src="<%= request.getContextPath() %>/assets/js/main.js"></script></body></html>

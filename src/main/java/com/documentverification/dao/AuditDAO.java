@@ -1,0 +1,6 @@
+package com.documentverification.dao;
+import com.documentverification.util.DBConnection; import java.sql.*; import java.util.*;
+public class AuditDAO {
+ public void log(long org,Long user,String event,String desc,String ip)throws Exception{String q="INSERT INTO audit_logs(organization_id,user_id,event_type,description,ip_address) VALUES(?,?,?,?,?)";try(Connection c=DBConnection.getConnection();PreparedStatement p=c.prepareStatement(q)){p.setLong(1,org);if(user==null)p.setNull(2,Types.BIGINT);else p.setLong(2,user);p.setString(3,event);p.setString(4,desc);p.setString(5,ip);p.executeUpdate();}}
+ public List<Map<String,Object>> findAll(long org)throws Exception{String q="SELECT a.*,u.name user_name FROM audit_logs a LEFT JOIN users u ON u.id=a.user_id WHERE a.organization_id=? ORDER BY a.created_at DESC";List<Map<String,Object>>l=new ArrayList<Map<String,Object>>();try(Connection c=DBConnection.getConnection();PreparedStatement p=c.prepareStatement(q)){p.setLong(1,org);try(ResultSet r=p.executeQuery()){while(r.next()){Map<String,Object>m=new HashMap<String,Object>();m.put("eventType",r.getString("event_type"));m.put("description",r.getString("description"));m.put("userName",r.getString("user_name"));m.put("ip",r.getString("ip_address"));m.put("createdAt",r.getTimestamp("created_at"));l.add(m);}}}return l;}
+}
