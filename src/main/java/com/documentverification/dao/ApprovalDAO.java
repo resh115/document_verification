@@ -1,12 +1,270 @@
 package com.documentverification.dao;
+
 import com.documentverification.model.ApprovalAction;
 import com.documentverification.util.DBConnection;
-import java.sql.*;import java.util.*;
+import java.sql.*;
+import java.util.*;
+
 public class ApprovalDAO {
- public List<ApprovalAction> findHistory(long org,long doc)throws Exception{String q="SELECT a.*,REPLACE(u.name,'Demo ','') approver_name,r.name approver_role FROM approval_actions a JOIN documents d ON d.id=a.document_id JOIN users u ON u.id=a.approver_id JOIN roles r ON r.id=u.role_id WHERE d.organization_id=? AND a.document_id=? ORDER BY a.acted_at";List<ApprovalAction> l=new ArrayList<>();try(Connection c=DBConnection.getConnection();PreparedStatement p=c.prepareStatement(q)){p.setLong(1,org);p.setLong(2,doc);try(ResultSet r=p.executeQuery()){while(r.next()){ApprovalAction a=new ApprovalAction();a.setId(r.getLong("id"));a.setDocumentId(r.getLong("document_id"));a.setVersionId(r.getLong("version_id"));a.setApproverId(r.getLong("approver_id"));a.setStageOrder(r.getInt("stage_order"));a.setApproverName(r.getString("approver_name"));a.setApproverRole(r.getString("approver_role"));a.setAction(r.getString("action"));a.setComment(r.getString("comment"));a.setActedAt(r.getTimestamp("acted_at"));l.add(a);}}}return l;}
- public List<com.documentverification.model.Document> findQueue(long org,long user)throws Exception{String q="SELECT d.* FROM documents d JOIN workflow_stages s ON s.id=d.current_stage_id WHERE d.organization_id=? AND d.status IN ('PENDING_APPROVAL','PENDING','IN_REVIEW') AND s.user_id=? ORDER BY d.updated_at DESC";List<com.documentverification.model.Document> l=new ArrayList<>();try(Connection c=DBConnection.getConnection();PreparedStatement p=c.prepareStatement(q)){p.setLong(1,org);p.setLong(2,user);try(ResultSet r=p.executeQuery()){while(r.next()){com.documentverification.model.Document d=new com.documentverification.model.Document();d.setId(r.getLong("id"));d.setOrganizationId(r.getLong("organization_id"));d.setSubmitterId(r.getLong("submitter_id"));d.setDocumentTypeId(r.getLong("document_type_id"));d.setWorkflowId(r.getLong("workflow_id"));d.setCurrentStageId(r.getLong("current_stage_id"));d.setTitle(r.getString("title"));d.setDescription(r.getString("description"));d.setStatus(r.getString("status"));d.setCurrentStageOrder(r.getInt("current_stage_order"));d.setCurrentVersion(r.getInt("current_version"));d.setCreatedAt(r.getTimestamp("created_at"));d.setUpdatedAt(r.getTimestamp("updated_at"));l.add(d);}}}return l;}
- public void process(long org,long user,long doc,long version,String action,String comment,String ip)throws Exception{if(!"APPROVE".equals(action)&&!"REJECT".equals(action)&&!"REQUEST_CHANGES".equals(action))throw new IllegalArgumentException("Invalid action");String docQ="SELECT d.*,s.user_id stage_user FROM documents d JOIN workflow_stages s ON s.id=d.current_stage_id WHERE d.organization_id=? AND d.id=? FOR UPDATE";String nextQ="SELECT * FROM workflow_stages WHERE workflow_id=? AND stage_order>? ORDER BY stage_order LIMIT 1";String ins="INSERT INTO approval_actions(document_id,version_id,approver_id,stage_order,action,comment) VALUES(?,?,?,?,?,?)";try(Connection c=DBConnection.getConnection()){c.setAutoCommit(false);try{long workflow,stageId,stageUser;int currentOrder,currentVersion;try(PreparedStatement p=c.prepareStatement(docQ)){p.setLong(1,org);p.setLong(2,doc);try(ResultSet r=p.executeQuery()){if(!r.next())throw new SecurityException("Document not found");workflow=r.getLong("workflow_id");currentOrder=r.getInt("current_stage_order");currentVersion=r.getInt("current_version");stageId=r.getLong("current_stage_id");stageUser=r.getLong("stage_user");}}if(stageUser!=user)throw new SecurityException("You are not assigned to this verification stage.");try(PreparedStatement p=c.prepareStatement(ins)){p.setLong(1,doc);p.setLong(2,version);p.setLong(3,user);p.setInt(4,currentOrder);p.setString(5,action);p.setString(6,comment);p.executeUpdate();}long nextStage=0;int nextOrder=currentOrder;String status;if("REJECT".equals(action))status="REJECTED";else if("REQUEST_CHANGES".equals(action))status="CHANGES_REQUIRED";else{try(PreparedStatement p=c.prepareStatement(nextQ)){p.setLong(1,workflow);p.setInt(2,currentOrder);try(ResultSet r=p.executeQuery()){if(r.next()){nextStage=r.getLong("id");nextOrder=r.getInt("stage_order");status="PENDING_APPROVAL";}else status="APPROVED";}}}String upd="UPDATE documents SET status=?,current_stage_id=?,current_stage_order=?,current_version=? WHERE id=? AND organization_id=?";try(PreparedStatement p=c.prepareStatement(upd)){p.setString(1,status);if(nextStage>0)p.setLong(2,nextStage);else if("REQUEST_CHANGES".equals(action))p.setLong(2,stageId);else p.setNull(2,Types.BIGINT);p.setInt(3,nextOrder);p.setInt(4,currentVersion);p.setLong(5,doc);p.setLong(6,org);p.executeUpdate();}if(nextStage>0){try(PreparedStatement p=c.prepareStatement("SELECT user_id FROM workflow_stages WHERE id=?")){p.setLong(1,nextStage);try(ResultSet r=p.executeQuery()){if(r.next())notifyUser(c,org,r.getLong(1),doc,"Document #"+doc+" is ready for your verification.","WORKFLOW");}}}String actor=getActor(c,user);notifyUser(c,org,getSubmitter(c,doc),doc,"Document #"+doc+" was "+("APPROVE".equals(action)?"approved":"REJECT".equals(action)?"rejected":"requested changes")+" by "+actor+". Status: "+status+".","STATUS");try(PreparedStatement a=c.prepareStatement("INSERT INTO audit_logs(organization_id,user_id,event_type,description,ip_address) VALUES(?,?,?,?,?)")){a.setLong(1,org);a.setLong(2,user);a.setString(3,action);a.setString(4,"Document #"+doc+" processed at stage "+currentOrder+".");a.setString(5,ip);a.executeUpdate();}c.commit();}catch(Exception e){c.rollback();throw e;}finally{c.setAutoCommit(true);}}}
- private void notifyUser(Connection c,long org,long user,long doc,String msg,String type)throws Exception{try(PreparedStatement n=c.prepareStatement("INSERT INTO notifications(organization_id,user_id,document_id,message,type) VALUES(?,?,?,?,?)")){n.setLong(1,org);n.setLong(2,user);n.setLong(3,doc);n.setString(4,msg);n.setString(5,type);n.executeUpdate();}}
- private long getSubmitter(Connection c,long doc)throws Exception{try(PreparedStatement p=c.prepareStatement("SELECT submitter_id FROM documents WHERE id=?")){p.setLong(1,doc);try(ResultSet r=p.executeQuery()){r.next();return r.getLong(1);}}}
- private String getActor(Connection c,long user)throws Exception{try(PreparedStatement p=c.prepareStatement("SELECT name FROM users WHERE id=?")){p.setLong(1,user);try(ResultSet r=p.executeQuery()){return r.next()?r.getString(1):"Verifier";}}}
+
+  public List<ApprovalAction> findHistory(long org, long doc) throws Exception {
+    String q =
+      "SELECT a.*,REPLACE(u.name,'Demo ','') approver_name,r.name approver_role FROM approval_actions a JOIN documents d ON d.id=a.document_id JOIN users u ON u.id=a.approver_id JOIN roles r ON r.id=u.role_id WHERE d.organization_id=? AND a.document_id=? ORDER BY a.acted_at";
+    List<ApprovalAction> l = new ArrayList<>();
+    try (
+      Connection c = DBConnection.getConnection();
+      PreparedStatement p = c.prepareStatement(q)
+    ) {
+      p.setLong(1, org);
+      p.setLong(2, doc);
+      try (ResultSet r = p.executeQuery()) {
+        while (r.next()) {
+          ApprovalAction a = new ApprovalAction();
+          a.setId(r.getLong("id"));
+          a.setDocumentId(r.getLong("document_id"));
+          a.setVersionId(r.getLong("version_id"));
+          a.setApproverId(r.getLong("approver_id"));
+          a.setStageOrder(r.getInt("stage_order"));
+          a.setApproverName(r.getString("approver_name"));
+          a.setApproverRole(r.getString("approver_role"));
+          a.setAction(r.getString("action"));
+          a.setComment(r.getString("comment"));
+          a.setActedAt(r.getTimestamp("acted_at"));
+          l.add(a);
+        }
+      }
+    }
+    return l;
+  }
+
+  public List<com.documentverification.model.Document> findQueue(
+    long org,
+    long user
+  ) throws Exception {
+    String q =
+      "SELECT d.* FROM documents d JOIN workflow_stages s ON s.id=d.current_stage_id WHERE d.organization_id=? AND d.status IN ('PENDING_APPROVAL','PENDING','IN_REVIEW') AND s.user_id=? ORDER BY d.updated_at DESC";
+    List<com.documentverification.model.Document> l = new ArrayList<>();
+    try (
+      Connection c = DBConnection.getConnection();
+      PreparedStatement p = c.prepareStatement(q)
+    ) {
+      p.setLong(1, org);
+      p.setLong(2, user);
+      try (ResultSet r = p.executeQuery()) {
+        while (r.next()) {
+          com.documentverification.model.Document d =
+            new com.documentverification.model.Document();
+          d.setId(r.getLong("id"));
+          d.setOrganizationId(r.getLong("organization_id"));
+          d.setSubmitterId(r.getLong("submitter_id"));
+          d.setDocumentTypeId(r.getLong("document_type_id"));
+          d.setWorkflowId(r.getLong("workflow_id"));
+          d.setCurrentStageId(r.getLong("current_stage_id"));
+          d.setTitle(r.getString("title"));
+          d.setDescription(r.getString("description"));
+          d.setStatus(r.getString("status"));
+          d.setCurrentStageOrder(r.getInt("current_stage_order"));
+          d.setCurrentVersion(r.getInt("current_version"));
+          d.setCreatedAt(r.getTimestamp("created_at"));
+          d.setUpdatedAt(r.getTimestamp("updated_at"));
+          l.add(d);
+        }
+      }
+    }
+    return l;
+  }
+
+  public void process(
+    long org,
+    long user,
+    long doc,
+    long version,
+    String action,
+    String comment,
+    String ip
+  ) throws Exception {
+    if (
+      !"APPROVE".equals(action) &&
+      !"REJECT".equals(action) &&
+      !"REQUEST_CHANGES".equals(action)
+    ) throw new IllegalArgumentException("Invalid action");
+    String docQ =
+      "SELECT d.*,s.user_id stage_user FROM documents d JOIN workflow_stages s ON s.id=d.current_stage_id WHERE d.organization_id=? AND d.id=? FOR UPDATE";
+    String nextQ =
+      "SELECT * FROM workflow_stages WHERE workflow_id=? AND stage_order>? ORDER BY stage_order LIMIT 1";
+    String ins =
+      "INSERT INTO approval_actions(document_id,version_id,approver_id,stage_order,action,comment) VALUES(?,?,?,?,?,?)";
+    try (Connection c = DBConnection.getConnection()) {
+      c.setAutoCommit(false);
+      try {
+        long workflow, stageId, stageUser;
+        int currentOrder, currentVersion;
+        try (PreparedStatement p = c.prepareStatement(docQ)) {
+          p.setLong(1, org);
+          p.setLong(2, doc);
+          try (ResultSet r = p.executeQuery()) {
+            if (!r.next()) throw new SecurityException("Document not found");
+            workflow = r.getLong("workflow_id");
+            currentOrder = r.getInt("current_stage_order");
+            currentVersion = r.getInt("current_version");
+            stageId = r.getLong("current_stage_id");
+            stageUser = r.getLong("stage_user");
+          }
+        }
+        if (stageUser != user) throw new SecurityException(
+          "You are not assigned to this verification stage."
+        );
+        try (PreparedStatement p = c.prepareStatement(ins)) {
+          p.setLong(1, doc);
+          p.setLong(2, version);
+          p.setLong(3, user);
+          p.setInt(4, currentOrder);
+          p.setString(5, action);
+          p.setString(6, comment);
+          p.executeUpdate();
+        }
+        long nextStage = 0;
+        int nextOrder = currentOrder;
+        String status;
+        if ("REJECT".equals(action)) status = "REJECTED";
+        else if ("REQUEST_CHANGES".equals(action)) status = "CHANGES_REQUIRED";
+        else {
+          try (PreparedStatement p = c.prepareStatement(nextQ)) {
+            p.setLong(1, workflow);
+            p.setInt(2, currentOrder);
+            try (ResultSet r = p.executeQuery()) {
+              if (r.next()) {
+                nextStage = r.getLong("id");
+                nextOrder = r.getInt("stage_order");
+                status = "PENDING_APPROVAL";
+              } else status = "APPROVED";
+            }
+          }
+        }
+        String upd =
+          "UPDATE documents SET status=?,current_stage_id=?,current_stage_order=?,current_version=? WHERE id=? AND organization_id=?";
+        try (PreparedStatement p = c.prepareStatement(upd)) {
+          p.setString(1, status);
+          if (nextStage > 0) p.setLong(2, nextStage);
+          else if ("REQUEST_CHANGES".equals(action)) p.setLong(2, stageId);
+          else p.setNull(2, Types.BIGINT);
+          p.setInt(3, nextOrder);
+          p.setInt(4, currentVersion);
+          p.setLong(5, doc);
+          p.setLong(6, org);
+          p.executeUpdate();
+        }
+        if (nextStage > 0) {
+          try (
+            PreparedStatement p = c.prepareStatement(
+              "SELECT user_id FROM workflow_stages WHERE id=?"
+            )
+          ) {
+            p.setLong(1, nextStage);
+            try (ResultSet r = p.executeQuery()) {
+              if (r.next()) notifyUser(
+                c,
+                org,
+                r.getLong(1),
+                doc,
+                "Document #" + doc + " is ready for your verification.",
+                "WORKFLOW"
+              );
+            }
+          }
+        }
+        String actor = getActor(c, user);
+        notifyUser(
+          c,
+          org,
+          getSubmitter(c, doc),
+          doc,
+          "Document #" +
+            doc +
+            " was " +
+            ("APPROVE".equals(action)
+              ? "approved"
+              : "REJECT".equals(action)
+                ? "rejected"
+                : "requested changes") +
+            " by " +
+            actor +
+            ". Status: " +
+            status +
+            ".",
+          "STATUS"
+        );
+        try (
+          PreparedStatement a = c.prepareStatement(
+            "INSERT INTO audit_logs(organization_id,user_id,event_type,description,ip_address) VALUES(?,?,?,?,?)"
+          )
+        ) {
+          a.setLong(1, org);
+          a.setLong(2, user);
+          a.setString(3, action);
+          a.setString(
+            4,
+            "Document #" + doc + " processed at stage " + currentOrder + "."
+          );
+          a.setString(5, ip);
+          a.executeUpdate();
+        }
+        c.commit();
+      } catch (Exception e) {
+        c.rollback();
+        throw e;
+      } finally {
+        c.setAutoCommit(true);
+      }
+    }
+  }
+
+  private void notifyUser(
+    Connection c,
+    long org,
+    long user,
+    long doc,
+    String msg,
+    String type
+  ) throws Exception {
+    try (
+      PreparedStatement n = c.prepareStatement(
+        "INSERT INTO notifications(organization_id,user_id,document_id,message,type) VALUES(?,?,?,?,?)"
+      )
+    ) {
+      n.setLong(1, org);
+      n.setLong(2, user);
+      n.setLong(3, doc);
+      n.setString(4, msg);
+      n.setString(5, type);
+      n.executeUpdate();
+    }
+  }
+
+  private long getSubmitter(Connection c, long doc) throws Exception {
+    try (
+      PreparedStatement p = c.prepareStatement(
+        "SELECT submitter_id FROM documents WHERE id=?"
+      )
+    ) {
+      p.setLong(1, doc);
+      try (ResultSet r = p.executeQuery()) {
+        r.next();
+        return r.getLong(1);
+      }
+    }
+  }
+
+  private String getActor(Connection c, long user) throws Exception {
+    try (
+      PreparedStatement p = c.prepareStatement(
+        "SELECT name FROM users WHERE id=?"
+      )
+    ) {
+      p.setLong(1, user);
+      try (ResultSet r = p.executeQuery()) {
+        return r.next() ? r.getString(1) : "Verifier";
+      }
+    }
+  }
 }

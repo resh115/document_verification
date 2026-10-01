@@ -1,49 +1,50 @@
 package com.documentverification.model;
 
 public class Role {
-    private long id;
-    private Long organizationId;
-    private String name;
-    private String description;
 
-    public Role() {}
+  private long id;
+  private Long organizationId;
+  private String name;
+  private String description;
 
-    public Role(long id, Long organizationId, String name, String description) {
-        this.id = id;
-        this.organizationId = organizationId;
-        this.name = name;
-        this.description = description;
-    }
+  public Role() {}
 
-    public long getId() {
-        return id;
-    }
+  public Role(long id, Long organizationId, String name, String description) {
+    this.id = id;
+    this.organizationId = organizationId;
+    this.name = name;
+    this.description = description;
+  }
 
-    public void setId(long id) {
-        this.id = id;
-    }
+  public long getId() {
+    return id;
+  }
 
-    public Long getOrganizationId() {
-        return organizationId;
-    }
+  public void setId(long id) {
+    this.id = id;
+  }
 
-    public void setOrganizationId(Long organizationId) {
-        this.organizationId = organizationId;
-    }
+  public Long getOrganizationId() {
+    return organizationId;
+  }
 
-    public String getName() {
-        return name;
-    }
+  public void setOrganizationId(Long organizationId) {
+    this.organizationId = organizationId;
+  }
 
-    public void setName(String name) {
-        this.name = name;
-    }
+  public String getName() {
+    return name;
+  }
 
-    public String getDescription() {
-        return description;
-    }
+  public void setName(String name) {
+    this.name = name;
+  }
 
-    public void setDescription(String description) {
-        this.description = description;
-    }
+  public String getDescription() {
+    return description;
+  }
+
+  public void setDescription(String description) {
+    this.description = description;
+  }
 }

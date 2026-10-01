@@ -1,10 +1,102 @@
 package com.documentverification.dao;
-import com.documentverification.model.DocumentType; import com.documentverification.util.DBConnection; import java.sql.*; import java.util.*;
+
+import com.documentverification.model.DocumentType;
+import com.documentverification.util.DBConnection;
+import java.sql.*;
+import java.util.*;
+
 public class DocumentTypeDAO {
- public List<DocumentType> findAll(long org)throws Exception{String q="SELECT * FROM document_types WHERE organization_id=? ORDER BY name";List<DocumentType> l=new ArrayList<DocumentType>();try(Connection c=DBConnection.getConnection();PreparedStatement p=c.prepareStatement(q)){p.setLong(1,org);try(ResultSet r=p.executeQuery()){while(r.next())l.add(map(r));}}return l;}
- public List<DocumentType> findActive(long org)throws Exception{String q="SELECT * FROM document_types WHERE organization_id=? AND active=TRUE ORDER BY name";List<DocumentType> l=new ArrayList<DocumentType>();try(Connection c=DBConnection.getConnection();PreparedStatement p=c.prepareStatement(q)){p.setLong(1,org);try(ResultSet r=p.executeQuery()){while(r.next())l.add(map(r));}}return l;}
- public long create(long org,String name,String desc)throws Exception{String q="INSERT INTO document_types(organization_id,name,description) VALUES(?,?,?)";try(Connection c=DBConnection.getConnection();PreparedStatement p=c.prepareStatement(q,Statement.RETURN_GENERATED_KEYS)){p.setLong(1,org);p.setString(2,name);p.setString(3,desc);p.executeUpdate();try(ResultSet r=p.getGeneratedKeys()){if(r.next())return r.getLong(1);}}throw new SQLException("Document type was not created");}
- public void update(long org,long id,String name,String desc)throws Exception{String q="UPDATE document_types SET name=?,description=? WHERE id=? AND organization_id=?";try(Connection c=DBConnection.getConnection();PreparedStatement p=c.prepareStatement(q)){p.setString(1,name);p.setString(2,desc);p.setLong(3,id);p.setLong(4,org);p.executeUpdate();}}
- public void setActive(long org,long id,boolean active)throws Exception{String q="UPDATE document_types SET active=? WHERE id=? AND organization_id=?";try(Connection c=DBConnection.getConnection();PreparedStatement p=c.prepareStatement(q)){p.setBoolean(1,active);p.setLong(2,id);p.setLong(3,org);p.executeUpdate();}}
- private DocumentType map(ResultSet r)throws Exception{DocumentType d=new DocumentType();d.setId(r.getLong("id"));d.setOrganizationId(r.getLong("organization_id"));d.setName(r.getString("name"));d.setDescription(r.getString("description"));d.setActive(r.getBoolean("active"));return d;}
+
+  public List<DocumentType> findAll(long org) throws Exception {
+    String q =
+      "SELECT * FROM document_types WHERE organization_id=? ORDER BY name";
+    List<DocumentType> l = new ArrayList<DocumentType>();
+    try (
+      Connection c = DBConnection.getConnection();
+      PreparedStatement p = c.prepareStatement(q)
+    ) {
+      p.setLong(1, org);
+      try (ResultSet r = p.executeQuery()) {
+        while (r.next()) l.add(map(r));
+      }
+    }
+    return l;
+  }
+
+  public List<DocumentType> findActive(long org) throws Exception {
+    String q =
+      "SELECT * FROM document_types WHERE organization_id=? AND active=TRUE ORDER BY name";
+    List<DocumentType> l = new ArrayList<DocumentType>();
+    try (
+      Connection c = DBConnection.getConnection();
+      PreparedStatement p = c.prepareStatement(q)
+    ) {
+      p.setLong(1, org);
+      try (ResultSet r = p.executeQuery()) {
+        while (r.next()) l.add(map(r));
+      }
+    }
+    return l;
+  }
+
+  public long create(long org, String name, String desc) throws Exception {
+    String q =
+      "INSERT INTO document_types(organization_id,name,description) VALUES(?,?,?)";
+    try (
+      Connection c = DBConnection.getConnection();
+      PreparedStatement p = c.prepareStatement(
+        q,
+        Statement.RETURN_GENERATED_KEYS
+      )
+    ) {
+      p.setLong(1, org);
+      p.setString(2, name);
+      p.setString(3, desc);
+      p.executeUpdate();
+      try (ResultSet r = p.getGeneratedKeys()) {
+        if (r.next()) return r.getLong(1);
+      }
+    }
+    throw new SQLException("Document type was not created");
+  }
+
+  public void update(long org, long id, String name, String desc)
+    throws Exception {
+    String q =
+      "UPDATE document_types SET name=?,description=? WHERE id=? AND organization_id=?";
+    try (
+      Connection c = DBConnection.getConnection();
+      PreparedStatement p = c.prepareStatement(q)
+    ) {
+      p.setString(1, name);
+      p.setString(2, desc);
+      p.setLong(3, id);
+      p.setLong(4, org);
+      p.executeUpdate();
+    }
+  }
+
+  public void setActive(long org, long id, boolean active) throws Exception {
+    String q =
+      "UPDATE document_types SET active=? WHERE id=? AND organization_id=?";
+    try (
+      Connection c = DBConnection.getConnection();
+      PreparedStatement p = c.prepareStatement(q)
+    ) {
+      p.setBoolean(1, active);
+      p.setLong(2, id);
+      p.setLong(3, org);
+      p.executeUpdate();
+    }
+  }
+
+  private DocumentType map(ResultSet r) throws Exception {
+    DocumentType d = new DocumentType();
+    d.setId(r.getLong("id"));
+    d.setOrganizationId(r.getLong("organization_id"));
+    d.setName(r.getString("name"));
+    d.setDescription(r.getString("description"));
+    d.setActive(r.getBoolean("active"));
+    return d;
+  }
 }

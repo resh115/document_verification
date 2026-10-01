@@ -1,6 +1,56 @@
 package com.documentverification.controller;
-import com.documentverification.dao.*; import com.documentverification.util.CsrfUtil; import javax.servlet.*; import javax.servlet.annotation.WebServlet; import javax.servlet.http.*; import java.io.IOException;
-@WebServlet({"/admin/dashboard","/submitter/dashboard","/approver/dashboard"}) public class DashboardServlet extends HttpServlet{
- private final DashboardDAO dao=new DashboardDAO(); private final DocumentDAO documents=new DocumentDAO(); private final OrganizationDAO orgDAO=new OrganizationDAO();
- protected void doGet(HttpServletRequest r,HttpServletResponse s)throws IOException,ServletException{long org=(Long)r.getSession().getAttribute("organizationId");long uid=(Long)r.getSession().getAttribute("userId");String uri=r.getRequestURI();try{r.setAttribute("csrfToken",CsrfUtil.token(r.getSession()));if(uri.endsWith("/admin/dashboard")){r.setAttribute("stats",dao.admin(org));r.setAttribute("tenants",orgDAO.findAll());r.setAttribute("currentTenant",orgDAO.findById(org));r.getRequestDispatcher("/WEB-INF/views/admin/dashboard.jsp").forward(r,s);}else if(uri.endsWith("/approver/dashboard")){r.setAttribute("stats",dao.approver(org,uid));r.getRequestDispatcher("/WEB-INF/views/approver/dashboard.jsp").forward(r,s);}else{r.setAttribute("stats",dao.submitter(org,uid));r.setAttribute("approvedDocuments",documents.findApprovedBySubmitter(org,uid));r.getRequestDispatcher("/WEB-INF/views/submitter/dashboard.jsp").forward(r,s);}}catch(Exception e){throw new ServletException("Unable to load dashboard",e);}}
+
+import com.documentverification.dao.*;
+import com.documentverification.util.CsrfUtil;
+import java.io.IOException;
+import javax.servlet.*;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.*;
+
+@WebServlet({
+  "/admin/dashboard",
+  "/submitter/dashboard",
+  "/approver/dashboard",
+})
+public class DashboardServlet extends HttpServlet {
+
+  private final DashboardDAO dao = new DashboardDAO();
+  private final DocumentDAO documents = new DocumentDAO();
+  private final OrganizationDAO orgDAO = new OrganizationDAO();
+
+  protected void doGet(HttpServletRequest r, HttpServletResponse s)
+    throws IOException, ServletException {
+    long org = (Long) r.getSession().getAttribute("organizationId");
+    long uid = (Long) r.getSession().getAttribute("userId");
+    String uri = r.getRequestURI();
+    try {
+      r.setAttribute("csrfToken", CsrfUtil.token(r.getSession()));
+      if (uri.endsWith("/admin/dashboard")) {
+        r.setAttribute("stats", dao.admin(org));
+        r.setAttribute("tenants", orgDAO.findAll());
+        r.setAttribute("currentTenant", orgDAO.findById(org));
+        r.getRequestDispatcher("/WEB-INF/views/admin/dashboard.jsp").forward(
+          r,
+          s
+        );
+      } else if (uri.endsWith("/approver/dashboard")) {
+        r.setAttribute("stats", dao.approver(org, uid));
+        r.getRequestDispatcher("/WEB-INF/views/approver/dashboard.jsp").forward(
+          r,
+          s
+        );
+      } else {
+        r.setAttribute("stats", dao.submitter(org, uid));
+        r.setAttribute(
+          "approvedDocuments",
+          documents.findApprovedBySubmitter(org, uid)
+        );
+        r.getRequestDispatcher(
+          "/WEB-INF/views/submitter/dashboard.jsp"
+        ).forward(r, s);
+      }
+    } catch (Exception e) {
+      throw new ServletException("Unable to load dashboard", e);
+    }
+  }
 }
